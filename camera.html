@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Driver Camera Monitor</title>
+<style>
+body{font:18px system-ui;max-width:850px;margin:30px auto;padding:16px;background:#edf2f7;color:#172b42}
+video{width:100%;max-height:440px;background:#172b42;border-radius:12px;transform:scaleX(-1)}
+button{padding:12px;margin:4px;font:inherit;cursor:pointer}#status{padding:18px;background:white;border-radius:8px}
+.alert{color:#af1515;font-weight:bold}small{display:block;margin:16px 0}
+</style>
+<h1>Driver Camera Monitor</h1>
+<p>Close eyes for 1.5 seconds to trigger an alert. Sudden forward head movement triggers a possible braking alert.</p>
+<video id="video" autoplay muted playsinline></video>
+<p><button id="start">Start Camera</button><button id="stop" disabled>Stop Camera</button></p>
+<p id="status" role="status">Camera off. Internet needed to load the face detection model.</p>
+<p id="counts">Drowsiness alerts: 0 | Possible braking events: 0</p>
+<small>Classroom prototype. Head movement cannot confirm vehicle braking. Lighting, glasses and camera movement can affect detection. Video is processed in this browser and is not recorded or uploaded.</small>
+<script type="module">
+// Page se video aur buttons le rahe hain. Model humein face ke points dega.
+const video = document.querySelector('#video');
+const start = document.querySelector('#start'), stop = document.querySelector('#stop');
+const status = document.querySelector('#status'), counts = document.querySelector('#counts');
+let model, stream, running = false, frame, lastFrame = -1;
+let closedAt = null, eyeAlert = false, previous = null, lastJolt = -Infinity;
+let sleepyCount = 0, joltCount = 0, joltUntil = 0;
+
+// Demo settings: timing aur sensitivity ek jagah rakhi hai.
+const EYE_LIMIT = 0.21;
+const CLOSED_EYE_TIME = 1500; // 1500 milliseconds = 1.5 seconds.
+const HEAD_ALERT_TIME = 2000;
+
+// Landmark distance pixels mein: video aspect ratio ka effect correct hota hai.
+function distance(a, b) {
+    return Math.hypot((a.x-b.x)*video.videoWidth, (a.y-b.y)*video.videoHeight);
+}
+
+// EAR = aankh ki vertical opening / horizontal width. Band aankh ka ratio kam hota hai.
+function eyeRatio(points, ids) {
+    // Ye 6 numbers MediaPipe face map mein eye ke fixed points hain.
+    const corner1 = points[ids[0]];
+    const upper1 = points[ids[1]];
+    const upper2 = points[ids[2]];
+    const corner2 = points[ids[3]];
+    const lower2 = points[ids[4]];
+    const lower1 = points[ids[5]];
+    const opening = distance(upper1, lower1) + distance(upper2, lower2);
+    const width = distance(corner1, corner2);
+    return opening / (2 * width);
+}
+
+function message(text, alert = false) {
+    status.textContent = text;
+    status.className = alert ? 'alert' : '';
+}
+
+// Normal blink chhota hota hai; eyes lagatar band hone par hi count badhega.
+function checkEyes(face, now) {
+    const leftEye = eyeRatio(face, [33,160,158,133,153,144]);
+    const rightEye = eyeRatio(face, [362,385,387,263,373,380]);
+    const average = (leftEye + rightEye) / 2;
+
+    if (average >= EYE_LIMIT) {
+        closedAt = null;
+        eyeAlert = false;
+        return;
+    }
+    if (closedAt === null) {
+        closedAt = now; // Eyes band milne par timer start.
+    }
+    if (now - closedAt >= CLOSED_EYE_TIME && !eyeAlert) {
+        eyeAlert = true;
+        sleepyCount++;
+    }
+}
+
+// Face ka neeche jana ya size badhna head jolt ka rough signal hai.
+function checkHeadMovement(face, now) {
+    const width = distance(face[234], face[454]);
+    const noseY = face[1].y * video.videoHeight;
+
+    if (previous !== null) {
+        const timeGap = now - previous.time;
+        const canCountAgain = now - lastJolt > HEAD_ALERT_TIME;
+        // Long gap ke baad comparison aur duplicate alerts avoid karte hain.
+        if (timeGap > 0 && timeGap < 250 && canCountAgain && width > 0 && previous.width > 0) {
+            const seconds = timeGap / 1000;
+            const downwardSpeed = (noseY - previous.y) / width / seconds;
+            const sizeChange = (width / previous.width - 1) / seconds;
+            if (downwardSpeed > 1.2 || sizeChange > 0.9) {
+                joltCount++;
+                lastJolt = now;
+                joltUntil = now + HEAD_ALERT_TIME;
+            }
+        }
+    }
+    previous = {y: noseY, width: width, time: now};
+}
+
+function showReport(now) {
+    let report = '';
+    if (eyeAlert) {
+        report = 'DROWSINESS ALERT: eyes closed!';
+    }
+    if (now < joltUntil) {
+        if (report !== '') report += ' | ';
+        report += 'POSSIBLE HARSH BRAKING: sudden head movement!';
+    }
+    if (report === '') {
+        message('Monitoring - eyes open / checking behavior.');
+    } else {
+        message(report, true);
+    }
+    counts.textContent = 'Drowsiness alerts: ' + sleepyCount +
+        ' | Possible braking events: ' + joltCount;
+}
+
+// Har naye video frame par detection; ek blink par alert nahi aata.
+function monitor() {
+    if (!running) return;
+    try {
+        if (video.readyState >= 2 && video.currentTime !== lastFrame) {
+            lastFrame = video.currentTime;
+            const now = performance.now();
+            const faces = model.detectForVideo(video, now).faceLandmarks;
+            if (!faces.length) {
+                closedAt = null; eyeAlert = false; previous = null; joltUntil = 0;
+                message('Face not visible - sit in front of the camera.');
+            } else {
+                // Main flow: face lo -> eyes check -> head check -> report.
+                const face = faces[0];
+                checkEyes(face, now);
+                checkHeadMovement(face, now);
+                showReport(now);
+            }
+        }
+        frame = requestAnimationFrame(monitor);
+    } catch (error) { shutdown(); message('Detection failed: '+error.message, true); }
+}
+
+function shutdown() {
+    running = false;
+    cancelAnimationFrame(frame);
+    if (stream) {
+        for (const track of stream.getTracks()) {
+            track.stop(); // Webcam release karte hain.
+        }
+    }
+    video.srcObject = null;
+    stream = null;
+    start.disabled = false;
+    stop.disabled = true;
+    closedAt = null;
+    eyeAlert = false;
+    previous = null;
+    lastFrame = -1;
+    joltUntil = 0;
+}
+
+start.onclick = async () => {
+    start.disabled = true;
+    message('Loading face model, then requesting camera permission...');
+    try {
+        if (!model) {
+            const {FaceLandmarker, FilesetResolver} = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21/vision_bundle.mjs');
+            const files = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21/wasm');
+            model = await FaceLandmarker.createFromOptions(files, {
+                baseOptions: {modelAssetPath:'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task'},
+                runningMode:'VIDEO', numFaces:1
+            });
+        }
+        // Browser permission user Allow button se deta hai; mic request nahi hota.
+        stream = await navigator.mediaDevices.getUserMedia({video:{width:640,height:480},audio:false});
+        video.srcObject = stream;
+        await video.play();
+        running = true; stop.disabled = false;
+        monitor();
+    } catch (error) {
+        shutdown();
+        message('Could not start: '+error.message+'. Check internet and browser camera permission.', true);
+    }
+};
+stop.onclick = () => { shutdown(); message('Camera stopped.'); };
+window.addEventListener('pagehide', shutdown);
+</script>
+</html>
+
