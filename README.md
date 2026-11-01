@@ -1,96 +1,144 @@
 # Driver Performance Monitoring System
 
-## Download and run
+A student project combining rule-based driving performance scoring with a webcam-based driver monitoring demonstration. Java handles console scoring and a local HTTP server; JavaScript and MediaPipe handle face landmark detection in the browser.
 
-GitHub par **Code → Download ZIP** select karo aur ZIP extract karo. Windows computer par Java **JDK 9 or newer** (including `javac`) installed aur PATH mein available hona chahiye for `StartCamera.bat`. Sirf Java runtime/JRE sufficient nahi hai. Phir extracted folder mein `StartCamera.bat` double-click karo. Camera demo ke liye internet aur webcam chahiye. Java JDK 8 use kar rahe ho toh `javac CameraMonitor.java` aur `java CameraMonitor` terminal mein run karo.
+> Educational prototype: camera alerts indicate prolonged eye closure or sudden head movement. They do not confirm driver fatigue or actual vehicle braking.
 
-## NEW: Camera demo
+## Features
 
-`StartCamera.bat` double-click karo. Browser mein `http://localhost:8080` open hoga. **Start Camera** dabao aur browser ke camera prompt mein **Allow** select karo. Stop Camera webcam release karta hai. Java server stop karne ke liye terminal mein Ctrl+C dabao. Camera kisi aur app mein busy ho toh us app ko close karo. Permission block ho toh browser ke site settings se camera allow karo.
+- **Driving performance score:** Evaluate manually entered maximum speed, sudden braking events, and harsh acceleration events.
+- **Performance feedback:** Display a safety rating and improvement suggestions.
+- **Eye-closure alerts:** Flag estimated eye closure lasting at least 1.5 seconds.
+- **Head-movement alerts:** Flag sudden head movement as a possible harsh braking event.
+- **Session counters:** Track camera alerts while the page remains open.
+- **Camera controls:** Start and stop the webcam from the browser.
 
-- Internet required: MediaPipe library aur trained model download hote hain.
-- Aankhein lagatar 1.5 seconds band: drowsiness alert aur counter.
-- Head achanak neeche/aage move: **Possible harsh braking** alert aur counter.
-- Camera video browser mein process hota hai; project record/upload nahi karta.
-- Counters session tak hain; purane console score se automatically connected nahi hain.
-- Normal blinking ko ignore karne ke liye timer hai. Poor light, glasses, head turns aur camera shake se missed/false alerts aa sakte hain. Stationary classroom demo mein test karo; actual driving safety system ke roop mein use nahi karna.
+The console and camera modules run independently. Camera events do not automatically update the console safety score.
 
-### Camera viva
+## Technology
 
-**Java ka role?** `CameraMonitor.java` built-in HTTP server se camera page localhost par serve karta hai. `main()` file read karta hai, server start karta hai aur browser kholta hai.
+| Component | Technology |
+| --- | --- |
+| Console scoring | Java, Scanner |
+| Local server | Java HttpServer |
+| Camera interface | HTML, CSS, JavaScript |
+| Face landmarks | MediaPipe Tasks Vision 0.10.21 |
+| Windows launcher | Batch script |
 
-**JavaScript kyun?** Browser webcam permission aur video access deta hai. Camera part JavaScript aur MediaPipe mein hai; yeh pure-Java detection implementation nahi hai.
+## Requirements
 
-**AI model kya karta hai?** MediaPipe face aur eye landmark points deta hai. Humne AI model train nahi kiya; existing model use kiya hai. Reference: https://developers.google.com/edge/mediapipe/solutions/vision/face_landmarker/web_js
+- Java **JDK 9 or newer**, with `java` and `javac` available on PATH, for the supplied launcher and commands.
+- A webcam and a browser supporting camera access, such as Chrome or Edge.
+- Internet access to load the MediaPipe library, runtime files, and pretrained model.
+- Local port `8080` available.
 
-**Eyes closed kaise?** `eyeRatio()` aankh ki vertical opening ko horizontal width se divide karta hai. Average ratio 0.21 se kam, continuously 1500 milliseconds tak rahe toh alert. Threshold demo heuristic hai, har face ke liye guaranteed nahi hai.
+JDK 8 is also supported with the manual compilation commands described below. A Java runtime alone cannot compile the project.
 
-**Harsh braking kaise?** `monitor()` consecutive frames mein face position aur size ka change dekhta hai. Sudden change possible head jolt hai. Camera actual vehicle deceleration measure nahi karta, isliye label possible harsh braking hai. Actual confirmation ke liye vehicle acceleration/speed sensor chahiye.
+## Getting Started
 
-**Important functions?** `monitor()` detection loop; `eyeRatio()` eye opening; `shutdown()` camera release; `getUserMedia()` camera permission aur stream; `requestAnimationFrame()` next frame.
+Select **Code → Download ZIP** on GitHub and extract the archive, or clone the repository:
 
-**Code padhne ka order:** Pehle `monitor()` padho. Uske andar `checkEyes()` eye timer handle karta hai, `checkHeadMovement()` pichhle frame se movement compare karta hai, aur `showReport()` screen par result dikhata hai. `EYE_LIMIT`, `CLOSED_EYE_TIME` aur `HEAD_ALERT_TIME` demo settings hain. Har function ka ek clear kaam hai, isliye alag-alag explain kar sakte ho.
+```sh
+git clone https://github.com/mandeepanshuman2-cmyk/driver-performance-monitor.git
+cd driver-performance-monitor
+```
 
-### Camera manual checks
+### Camera Monitor
 
-1. Start, permission Allow, preview aur face detected status check karo.
-2. Normal blink: no alert. Eyes 2 seconds close: one alert; open then close: next alert.
-3. Face hide: face not visible; return: closure timer fresh start.
-4. Sudden head nod/lean: possible braking alert (sensitivity lighting/camera par depend karti hai).
-5. Stop: camera indicator off. Start again: monitoring resume.
-6. Permission deny / internet disconnect: readable error, Start button retry ke liye available.
+On Windows, double-click **StartCamera.bat** in the project folder. Alternatively, open a terminal in that folder and run:
 
-Simple Java console project. User trip details enter karta hai aur program safety score, rating aur suggestions dikhata hai. Live GPS/sensor tracking aur database is version mein nahi hain; report program close hone ke baad save nahi hoti.
+```sh
+javac --release 8 CameraMonitor.java
+java CameraMonitor
+```
 
-## Run
+1. Open [http://localhost:8080](http://localhost:8080) if the browser does not open automatically.
+2. Select **Start Camera** and allow camera access when prompted.
+3. Face the camera with adequate lighting.
+4. Select **Stop Camera** to release the webcam.
+5. Press **Ctrl+C** in the terminal to stop the Java server.
 
-Java JDK installed hona chahiye. Project folder mein terminal open karke:
+With JDK 8, compile using `javac CameraMonitor.java` instead.
 
-```text
+### Console Scoring
+
+Run these commands from the project folder:
+
+```sh
 javac --release 8 DriverPerformance.java
 java DriverPerformance
 ```
 
-Yeh compile command installed JDK 21 se Java 8-compatible file banati hai, kyunki is computer ka Java runtime 8 hai. Agar JDK bhi 8 ho toh `javac DriverPerformance.java` use karo.
+Enter the driver's name, maximum speed in km/h, sudden braking count, and harsh acceleration count. The application displays a score, rating, and suggestions, then offers to evaluate another trip.
 
-## Score ka logic
+With JDK 8, compile using `javac DriverPerformance.java` instead.
 
-- Starting score: 100.
-- Maximum speed 80 km/h se zyada: 20 points deduct (sirf ek baar).
-- Har sudden brake: 5 points deduct.
-- Har harsh acceleration: 5 points deduct.
-- Minimum score: 0.
-- 80–100: Good; 50–79: Average; 0–49: Needs Improvement.
+## Scoring Rules
 
-Example: speed 90, brakes 2, acceleration 1 → 100 − 20 − 10 − 5 = 65 (Average).
+Each evaluation starts at **100 points**. The following demonstration penalties apply:
 
-Yeh classroom demonstration ke assumed rules hain. 80 km/h universal legal speed limit nahi hai. Counts aur speed manually enter hote hain; program unhe sensor se detect nahi karta.
+| Condition | Penalty |
+| --- | --- |
+| Maximum speed exceeds 80 km/h | 20 points, applied once |
+| Each sudden braking event | 5 points |
+| Each harsh acceleration event | 5 points |
 
-## Viva mein explain kaise karein
+The minimum score is zero.
 
-**Project kya karta hai?** Driving behavior ke manually entered data se rule-based safety score aur advice generate karta hai.
+| Score | Rating |
+| --- | --- |
+| 80–100 | Good |
+| 50–79 | Average |
+| 0–49 | Needs Improvement |
 
-**Flow?** Input → validation → score calculation → rating → report → another trip ya exit.
+**Example:** A maximum speed of 90 km/h, two sudden braking events, and one harsh acceleration event produce `100 - 20 - 10 - 5 = 65`, rated **Average**.
 
-**Scanner kya hai?** Java ki class jo keyboard input read karti hai. `nextLine()` ek poori line read karta hai.
+These rules are illustrative. The 80 km/h threshold is not a universal legal speed limit. All console inputs are entered manually.
 
-**readNumber()?** Input ko integer banata hai. Negative value, text aur integer range se bahar value par dobara input maangta hai. `try-catch` invalid number ki exception handle karta hai.
+## Camera Detection
 
-**calculateScore()?** Teen inputs lekar penalties calculate karta hai aur score return karta hai. Calculation ke liye `long` bade numbers ko handle karta hai. `Math.max()` score ko zero se neeche nahi jaane deta.
+The Java server serves `camera.html` on localhost. The browser requests webcam access and uses a pretrained MediaPipe model to obtain face landmarks. JavaScript applies the following rules:
 
-**static kyun?** In methods ko main se call karne ke liye DriverPerformance ka alag object banana nahi padta.
+- **Eye closure:** The average eye aspect ratio must remain below `0.21` for at least `1500 ms` to trigger one drowsiness alert. Reopening the eyes resets the closure timer.
+- **Head movement:** Nose position and face width are compared between consecutive frames. Rapid downward movement or apparent face-size growth can trigger a possible harsh braking alert. A two-second cooldown limits repeated counts.
+- **Face not visible:** Temporary tracking state resets and a message asks the user to face the camera.
 
-**do-while kyun?** Report kam se kam ek baar generate hoti hai; uske baad user chahe toh repeat hoti hai.
+Stopping and restarting the camera retains the page's event counters. Reloading the page resets them.
 
-**if-else kyun?** Score ke hisaab se category decide karta hai. Advice ke independent `if` statements ek saath multiple suggestions de sakte hain.
+## Project Structure
 
-**Database connectivity?** Is version mein database nahi hai. Data variables mein temporarily rehta hai. Database requirement ho toh teacher se confirm karke storage add karna hoga.
+```text
+driver-performance-monitor/
+├── DriverPerformance.java   # Console input, scoring, and feedback
+├── CameraMonitor.java       # Local HTTP server and browser launch
+├── camera.html              # Camera interface and detection logic
+├── StartCamera.bat          # Windows compile-and-run launcher
+├── .gitignore               # Excludes compiled files and editor settings
+└── README.md                # Project documentation
+```
 
-**Limitations?** Manual data, assumed scoring rules, no saved history, no live monitoring.
+### Key Methods and Functions
 
-## Practice inputs
+| Method / Function | Responsibility |
+| --- | --- |
+| `readNumber()` | Validate non-negative whole-number input |
+| `calculateScore()` | Apply penalties and return the driving score |
+| `CameraMonitor.main()` | Read the camera page and start the local server |
+| `distance()` | Calculate distance between face landmarks |
+| `eyeRatio()` | Calculate eye opening relative to eye width |
+| `checkEyes()` | Track closure duration and count alerts |
+| `checkHeadMovement()` | Compare head measurements between frames |
+| `showReport()` | Update alert messages and counters |
+| `monitor()` | Process new frames and coordinate detection |
+| `shutdown()` | Stop monitoring and release the webcam |
 
-| Speed | Brakes | Acceleration | Expected score | Rating |
+## Validation
+
+Java compilation and synthetic detection-logic checks have passed. Real webcam behavior still requires testing on the target computer; no real-world accuracy measurement is claimed.
+
+### Console Examples
+
+| Maximum speed (km/h) | Sudden brakes | Harsh accelerations | Expected score | Rating |
 | --- | --- | --- | --- | --- |
 | 60 | 0 | 0 | 100 | Good |
 | 80 | 0 | 0 | 100 | Good |
@@ -98,4 +146,39 @@ Yeh classroom demonstration ke assumed rules hain. 80 km/h universal legal speed
 | 70 | 10 | 1 | 45 | Needs Improvement |
 | 100 | 20 | 20 | 0 | Needs Improvement |
 
-Text aur negative number enter karke validation bhi check karo. Team members apna actual contribution hi explain karein aur poora program ek baar khud run karke samjhein.
+### Camera Checks
+
+Perform these checks while stationary:
+
+1. Start the camera and verify that the preview appears.
+2. Blink normally and check that brief blinks do not trigger an alert.
+3. Close both eyes for approximately two seconds and check for one alert. Reopen and repeat to check the next event.
+4. Move out of view and verify that tracking resets.
+5. Make a sudden head nod or forward lean and observe the possible braking alert. Results depend on the camera setup and movement.
+6. Stop the camera and verify that webcam access is released.
+7. Deny camera permission and verify that an error message appears and retry remains available.
+
+## Troubleshooting
+
+| Issue | Suggested action |
+| --- | --- |
+| `javac` is not recognized | Install a JDK and add its `bin` directory to PATH |
+| `--release` is not recognized | On JDK 8, compile manually without `--release 8` |
+| Port 8080 is already in use | Stop the application using it, or change the port in `CameraMonitor.java` and recompile |
+| Browser does not open | Open `http://localhost:8080` manually |
+| Camera cannot start | Check browser permission and close other apps using the webcam |
+| Model fails to load | Check internet access and whether the CDN or model URLs are blocked |
+| Face tracking is unstable | Improve lighting, keep the camera steady, and face it directly |
+| `camera.html` cannot be found | Run the application from the project folder |
+
+## Privacy and Limitations
+
+- Camera frames are processed in the browser. The application does not record or upload video; external requests load the detection library and model.
+- There is no database, persistent trip history, GPS tracking, or vehicle sensor integration.
+- Camera alerts use configurable heuristics. Lighting, glasses, head turns, and camera movement can cause false or missed detections.
+- Head movement cannot establish actual braking. Confirmation requires vehicle speed or acceleration measurements.
+- This prototype is intended for stationary classroom demonstrations and is not a validated driving safety system.
+
+## Reference
+
+- [MediaPipe Face Landmarker for Web — Google AI Edge](https://developers.google.com/edge/mediapipe/solutions/vision/face_landmarker/web_js)
